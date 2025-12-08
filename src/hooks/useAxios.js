@@ -1,33 +1,33 @@
-// src/hooks/useAxios.js - Update
 import axios from 'axios';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-
-const axiosPublic = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000',
-  withCredentials: true, // Important for cookies
-});
+import { useAuth } from './useAuth';
 
 const axiosSecure = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000',
-  withCredentials: true,
+  baseURL: import.meta.env.VITE_API_URL,
+  withCredentials: true, // এটি থাকতে হবে
 });
 
-// Response interceptor for handling 401/403
-axiosSecure.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const status = error.response?.status;
-    
-    if (status === 401 || status === 403) {
-      // Redirect to login
-      window.location.href = '/login';
-    }
-    
-    return Promise.reject(error);
-  }
-);
+// Interceptor
+const useAxiosSecure = () => {
+  const { logOut } = useAuth();
+  const navigate = useNavigate();
 
-export const useAxiosPublic = () => axiosPublic;
-export const useAxiosSecure = () => axiosSecure;
+  useEffect(() => {
+    axiosSecure.interceptors.response.use(
+      res => res,
+      async error => {
+        // যদি 401 বা 403 আসে, লগআউট করে দিন
+        if (error.response.status === 401 || error.response.status === 403) {
+          await logOut();
+          navigate('/login');
+        }
+        return Promise.reject(error);
+      }
+    );
+  }, [logOut, navigate]);
 
-export { axiosPublic, axiosSecure };
+  return axiosSecure;
+};
+
+export default useAxiosSecure;

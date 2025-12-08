@@ -35,8 +35,10 @@ const AuthProvider = ({ children }) => {
       return result;
     } catch (error) {
       setAuthError(error.message);
+      setLoading(false); // ✅ Error হলে loading false
       throw error;
     }
+    // Note: Success হলে onAuthStateChanged loading false করবে
   };
 
   // Sign in with email and password
@@ -48,6 +50,7 @@ const AuthProvider = ({ children }) => {
       return result;
     } catch (error) {
       setAuthError(error.message);
+      setLoading(false); // ✅ Error হলে loading false
       throw error;
     }
   };
@@ -61,6 +64,7 @@ const AuthProvider = ({ children }) => {
       return result;
     } catch (error) {
       setAuthError(error.message);
+      setLoading(false); // ✅ Error হলে loading false
       throw error;
     }
   };
@@ -71,8 +75,10 @@ const AuthProvider = ({ children }) => {
     setAuthError(null);
     try {
       await signOut(auth);
+      // onAuthStateChanged will set loading to false
     } catch (error) {
       setAuthError(error.message);
+      setLoading(false); // ✅ Error হলে loading false
       throw error;
     }
   };
@@ -156,9 +162,11 @@ const AuthProvider = ({ children }) => {
     return 'N/A';
   };
 
-  // Auth state observer with JWT integration
+  // ✅ Auth state observer with JWT integration - FIXED
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      console.log('Auth State Changed:', currentUser?.email || 'No user'); // Debug log
+      
       setUser(currentUser);
 
       // JWT Token Management
@@ -166,7 +174,8 @@ const AuthProvider = ({ children }) => {
         const userInfo = { email: currentUser.email };
         try {
           // Get JWT token from server
-          await axiosPublic.post('/jwt', userInfo);
+          const response = await axiosPublic.post('/jwt', userInfo);
+          console.log('JWT Token Generated:', response.data); // Debug log
         } catch (error) {
           console.error('JWT generation error:', error);
         }
@@ -174,16 +183,28 @@ const AuthProvider = ({ children }) => {
         // Clear JWT token
         try {
           await axiosPublic.post('/logout');
+          console.log('User logged out, token cleared'); // Debug log
         } catch (error) {
           console.error('Logout error:', error);
         }
       }
 
+      // ✅ সব কাজ শেষে loading false - এটাই মূল fix
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
+
+  // ✅ Clear auth error after 5 seconds
+  useEffect(() => {
+    if (authError) {
+      const timer = setTimeout(() => {
+        setAuthError(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [authError]);
 
   const authInfo = {
     user,
