@@ -11,13 +11,8 @@ const FeaturedServices = () => {
   const { data: services = [], isLoading, error } = useQuery({
     queryKey: ['featuredServices'],
     queryFn: async () => {
-      try {
-        const res = await axiosPublic.get('/services/featured?limit=6');
-        return res.data;
-      } catch (err) {
-        console.error("Error fetching services:", err);
-        return []; // এরর হলে খালি অ্যারে রিটার্ন করবে
-      }
+      const res = await axiosPublic.get('/services/featured?limit=6');
+      return Array.isArray(res.data) ? res.data : [];
     },
   });
 
@@ -63,12 +58,11 @@ const FeaturedServices = () => {
           </div>
         ) : error ? (
           <div className="text-center py-12">
-            <p className="text-red-500">Failed to load services. Please check your connection.</p>
+            <p className="text-red-500">Failed to load services. Please try again later.</p>
           </div>
         ) : !Array.isArray(services) || services.length === 0 ? (
-          // এখানে চেক করা হচ্ছে services আসলেই Array কিনা
           <div className="text-center py-12">
-            <p className="text-gray-500">No services available at the moment.</p>
+            <p className="text-gray-500 dark:text-gray-400">No services available at the moment.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
