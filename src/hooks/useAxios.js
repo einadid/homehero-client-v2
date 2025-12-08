@@ -1,36 +1,33 @@
+// src/hooks/useAxios.js - Update
 import axios from 'axios';
-import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from './useAuth';
 
-export const axiosSecure = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+const axiosPublic = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000',
+  withCredentials: true, // Important for cookies
+});
+
+const axiosSecure = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000',
   withCredentials: true,
 });
 
-const useAxiosSecure = () => {
-  const { logOut } = useAuth();
-  const navigate = useNavigate();
+// Response interceptor for handling 401/403
+axiosSecure.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const status = error.response?.status;
+    
+    if (status === 401 || status === 403) {
+      // Redirect to login
+      window.location.href = '/login';
+    }
+    
+    return Promise.reject(error);
+  }
+);
 
-  useEffect(() => {
-    const interceptor = axiosSecure.interceptors.response.use(
-      res => res,
-      async error => {
-        if (error.response?.status === 401 || error.response?.status === 403) {
-          await logOut();
-          navigate('/login');
-        }
-        return Promise.reject(error);
-      }
-    );
+export const useAxiosPublic = () => axiosPublic;
+export const useAxiosSecure = () => axiosSecure;
 
-    // ✅ clean up (important)
-    return () => {
-      axiosSecure.interceptors.response.eject(interceptor);
-    };
-  }, [logOut, navigate]);
-
-  return axiosSecure;
-};
-
-export default useAxiosSecure;
+export { axiosPublic, axiosSecure };
