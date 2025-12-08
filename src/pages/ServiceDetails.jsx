@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { 
   FiArrowLeft, 
   FiStar, 
@@ -16,6 +16,7 @@ import {
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import { axiosPublic } from '../hooks/useAxios';
+import useAxiosSecure from '../hooks/useAxiosSecure';
 import { useAuth } from '../hooks/useAuth';
 import { formatPrice, formatDate, getCategoryInfo } from '../utils/helpers';
 import LoadingSpinner from '../components/shared/LoadingSpinner';
@@ -27,6 +28,7 @@ const ServiceDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const axiosSecure = useAxiosSecure();
   
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [bookingDate, setBookingDate] = useState('');
@@ -44,6 +46,7 @@ const ServiceDetails = () => {
 
   const service = data;
 
+  // Handle Book Now button click
   const handleBookNow = () => {
     if (!user) {
       toast.error('Please login to book a service');
@@ -51,38 +54,69 @@ const ServiceDetails = () => {
       return;
     }
 
+    // Check if user is trying to book their own service
     if (user.email === service?.providerEmail) {
-      toast.error("You cannot book your own service");
+      toast.error("You cannot book your own service!");
       return;
     }
 
     setIsBookingModalOpen(true);
   };
 
+  // Handle Booking Confirmation - FIXED VERSION
   const handleConfirmBooking = async () => {
     if (!bookingDate) {
       toast.error('Please select a booking date');
       return;
     }
 
+    // Double check: Prevent booking own service
+    if (user?.email === service.providerEmail) {
+      toast.error("You cannot book your own service!");
+      return;
+    }
+
     setIsBooking(true);
+    
     try {
+      // Complete booking data with all required fields
       const bookingData = {
-        serviceId: id,
+        // Service Information
+        serviceId: service._id || id,
+        serviceName: service.serviceName,
+        serviceImage: service.imageUrl,
+        
+        // Provider Information
+        providerEmail: service.providerEmail,
+        providerName: service.providerName,
+        
+        // User (Customer) Information
         userEmail: user.email,
         userName: user.displayName,
-        userPhoto: user.photoURL,
-        bookingDate,
-        specialInstructions,
+        userPhoto: user.photoURL || 'https://i.ibb.co/5GzXkwq/user.png',
+        
+        // Booking Details
         price: service.price,
+        bookingDate: bookingDate,
+        specialInstructions: specialInstructions,
+        
+        // Status
+        status: 'pending',
+        
+        // Timestamps
+        createdAt: new Date().toISOString()
       };
 
-      await axiosPublic.post('/bookings', bookingData);
-      toast.success('Booking confirmed successfully!');
-      setIsBookingModalOpen(false);
-      setBookingDate('');
-      setSpecialInstructions('');
-      navigate('/my-bookings');
+      // Send booking request to server
+      const response = await axiosSecure.post('/bookings', bookingData);
+      
+      if (response.data.success) {
+        toast.success('Service booked successfully!');
+        setIsBookingModalOpen(false);
+        setBookingDate('');
+        setSpecialInstructions('');
+        navigate('/my-bookings');
+      }
     } catch (error) {
       console.error('Booking error:', error);
       toast.error(error.response?.data?.message || 'Failed to book service');
@@ -91,8 +125,16 @@ const ServiceDetails = () => {
     }
   };
 
+  // Handle Share
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href);
+    toast.success('Link copied to clipboard!');
+  };
+
+  // Loading State
   if (isLoading) return <LoadingSpinner fullScreen />;
 
+  // Error State
   if (error || !service) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -108,6 +150,7 @@ const ServiceDetails = () => {
     );
   }
 
+  // Calculate average rating
   const categoryInfo = getCategoryInfo(service.category);
   const avgRating = service.reviews?.length > 0
     ? (service.reviews.reduce((sum, r) => sum + r.rating, 0) / service.reviews.length).toFixed(1)
@@ -133,7 +176,7 @@ const ServiceDetails = () => {
             >
               <Link
                 to="/services"
-                className="inline-flex items-center gap-2 text-white/80 hover:text-white mb-4"
+                className="inline-flex items-center gap-2 text-white/80 hover:text-white mb-4 transition-colors"
               >
                 <FiArrowLeft />
                 Back to Services
@@ -161,6 +204,12 @@ const ServiceDetails = () => {
                   <FiUser />
                   {service.providerName}
                 </span>
+                {service.serviceArea && (
+                  <span className="flex items-center gap-2">
+                    <FiMapPin />
+                    {service.serviceArea}
+                  </span>
+                )}
                 <span className="flex items-center gap-2">
                   <FiClock />
                   Added {formatDate(service.createdAt)}
@@ -317,7 +366,7 @@ const ServiceDetails = () => {
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-full bg-primary-500/20 flex items-center justify-center">
                     <span className="text-primary-600 dark:text-primary-400 font-bold text-lg">
-                      {service.providerName?.charAt(0)}
+                      {service.providerName?.charAt(0)?.toUpperCase()}
                     </span>
                   </div>
                   <div>
@@ -357,10 +406,7 @@ const ServiceDetails = () => {
 
               {/* Share Button */}
               <button
-                onClick={() => {
-                  navigator.clipboard.writeText(window.location.href);
-                  toast.success('Link copied to clipboard!');
-                }}
+                onClick={handleShare}
                 className="w-full mt-4 py-3 rounded-xl border border-light-400 dark:border-dark-100 flex items-center justify-center gap-2 text-gray-600 dark:text-gray-400 hover:bg-light-200 dark:hover:bg-dark-100 transition-colors"
               >
                 <FiShare2 />
@@ -410,17 +456,30 @@ const ServiceDetails = () => {
             />
           </div>
 
+          {/* Your Name (read-only) */}
+          <div>
+            <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
+              Your Name
+            </label>
+            <input
+              type="text"
+              value={user?.displayName || ''}
+              readOnly
+              className="w-full px-4 py-3 rounded-xl bg-light-200 dark:bg-dark-100 border border-light-400 dark:border-dark-100 text-gray-500 cursor-not-allowed"
+            />
+          </div>
+
           {/* Booking Date */}
           <div>
             <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
-              Select Date *
+              Select Date <span className="text-red-500">*</span>
             </label>
             <input
               type="date"
               value={bookingDate}
               onChange={(e) => setBookingDate(e.target.value)}
               min={new Date().toISOString().split('T')[0]}
-              className="w-full px-4 py-3 rounded-xl bg-light-100 dark:bg-dark-100 border border-light-400 dark:border-dark-100 focus:outline-none focus:border-primary-500"
+              className="w-full px-4 py-3 rounded-xl bg-light-100 dark:bg-dark-100 border border-light-400 dark:border-dark-100 text-dark-300 dark:text-light-100 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
             />
           </div>
 
@@ -434,16 +493,31 @@ const ServiceDetails = () => {
               onChange={(e) => setSpecialInstructions(e.target.value)}
               rows={3}
               placeholder="Any specific requirements or instructions..."
-              className="w-full px-4 py-3 rounded-xl bg-light-100 dark:bg-dark-100 border border-light-400 dark:border-dark-100 focus:outline-none focus:border-primary-500 resize-none"
+              className="w-full px-4 py-3 rounded-xl bg-light-100 dark:bg-dark-100 border border-light-400 dark:border-dark-100 text-dark-300 dark:text-light-100 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 resize-none"
             />
           </div>
 
-          {/* Confirm Button */}
+          {/* Price Summary */}
+          <div className="p-4 rounded-xl bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800">
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600 dark:text-gray-400">Total Amount</span>
+              <span className="text-2xl font-bold text-primary-600 dark:text-primary-400">
+                {formatPrice(service.price)}
+              </span>
+            </div>
+          </div>
+
+          {/* Confirm Buttons */}
           <div className="flex gap-3 pt-4">
             <Button
               variant="ghost"
-              onClick={() => setIsBookingModalOpen(false)}
+              onClick={() => {
+                setIsBookingModalOpen(false);
+                setBookingDate('');
+                setSpecialInstructions('');
+              }}
               className="flex-1"
+              disabled={isBooking}
             >
               Cancel
             </Button>
@@ -451,9 +525,10 @@ const ServiceDetails = () => {
               variant="primary"
               onClick={handleConfirmBooking}
               loading={isBooking}
+              disabled={isBooking || !bookingDate}
               className="flex-1"
             >
-              Confirm Booking
+              {isBooking ? 'Booking...' : 'Confirm Booking'}
             </Button>
           </div>
         </div>

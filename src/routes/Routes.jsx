@@ -8,6 +8,7 @@ import AddService from '../pages/AddService';
 import MyServices from '../pages/MyServices';
 import UpdateService from '../pages/UpdateService';
 import MyBookings from '../pages/MyBookings';
+import ServiceToDo from '../pages/ServiceToDo'; // নতুন import
 import Profile from '../pages/Profile';
 import Login from '../pages/Login';
 import Register from '../pages/Register';
@@ -61,6 +62,14 @@ const router = createBrowserRouter([
         element: (
           <PrivateRoute>
             <MyBookings />
+          </PrivateRoute>
+        ),
+      },
+      {
+        path: 'service-todo',  // নতুন route
+        element: (
+          <PrivateRoute>
+            <ServiceToDo />
           </PrivateRoute>
         ),
       },

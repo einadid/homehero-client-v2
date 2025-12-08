@@ -12,7 +12,8 @@ import {
   FiLogIn, 
   FiLogOut,
   FiMenu,
-  FiX 
+  FiX,
+  FiBell  // নতুন যোগ হলো
 } from 'react-icons/fi';
 import { useAuth } from '../../hooks/useAuth';
 import ThemeToggle from './ThemeToggle';
@@ -51,6 +52,7 @@ const Navbar = () => {
   const privateLinks = [
     { path: '/add-service', label: 'Add Service', icon: <FiPlus /> },
     { path: '/my-services', label: 'My Services', icon: <FiList /> },
+    { path: '/service-todo', label: 'Service Requests', icon: <FiBell /> }, // নতুন লাইন
     { path: '/my-bookings', label: 'My Bookings', icon: <FiCalendar /> },
     { path: '/profile', label: 'Profile', icon: <FiUser /> },
   ];
@@ -76,17 +78,17 @@ const Navbar = () => {
   return (
     <>
       <motion.header
-  initial={{ y: -100 }}
-  animate={{ y: 0 }}
-  className={`
-    fixed top-0 left-0 right-0 z-40
-    transition-all duration-500
-    ${isScrolled 
-      ? 'py-2 bg-light-100/95 dark:bg-dark-200/95 backdrop-blur-xl shadow-lg border-b border-light-400/50 dark:border-dark-100/50' 
-      : 'py-4 bg-transparent'
-    }
-  `}
->
+        initial={{ y: -100 }}
+        animate={{ y: 0 }}
+        className={`
+          fixed top-0 left-0 right-0 z-40
+          transition-all duration-500
+          ${isScrolled 
+            ? 'py-2 bg-light-100/95 dark:bg-dark-200/95 backdrop-blur-xl shadow-lg border-b border-light-400/50 dark:border-dark-100/50' 
+            : 'py-4 bg-transparent'
+          }
+        `}
+      >
         <nav className="container mx-auto px-4 lg:px-8">
           <div className="flex items-center justify-between">
             {/* Logo */}
