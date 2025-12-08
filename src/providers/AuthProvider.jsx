@@ -26,64 +26,59 @@ const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
 
-  // Create user with email and password
+  // ✅ Create user
   const createUser = async (email, password) => {
     setLoading(true);
     setAuthError(null);
     try {
-      const result = await createUserWithEmailAndPassword(auth, email, password);
-      return result;
+      return await createUserWithEmailAndPassword(auth, email, password);
     } catch (error) {
       setAuthError(error.message);
-      setLoading(false); // ✅ Error হলে loading false
+      setLoading(false);
       throw error;
     }
-    // Note: Success হলে onAuthStateChanged loading false করবে
   };
 
-  // Sign in with email and password
+  // ✅ Sign in
   const signIn = async (email, password) => {
     setLoading(true);
     setAuthError(null);
     try {
-      const result = await signInWithEmailAndPassword(auth, email, password);
-      return result;
+      return await signInWithEmailAndPassword(auth, email, password);
     } catch (error) {
       setAuthError(error.message);
-      setLoading(false); // ✅ Error হলে loading false
+      setLoading(false);
       throw error;
     }
   };
 
-  // Sign in with Google
+  // ✅ Google Sign in
   const signInWithGoogle = async () => {
     setLoading(true);
     setAuthError(null);
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      return result;
+      return await signInWithPopup(auth, googleProvider);
     } catch (error) {
       setAuthError(error.message);
-      setLoading(false); // ✅ Error হলে loading false
+      setLoading(false);
       throw error;
     }
   };
 
-  // Log out
+  // ✅ Log out
   const logOut = async () => {
     setLoading(true);
     setAuthError(null);
     try {
       await signOut(auth);
-      // onAuthStateChanged will set loading to false
     } catch (error) {
       setAuthError(error.message);
-      setLoading(false); // ✅ Error হলে loading false
+      setLoading(false);
       throw error;
     }
   };
 
-  // Update user profile (name and photo)
+  // ✅ Update profile
   const updateUserProfile = async (name, photo) => {
     setAuthError(null);
     try {
@@ -91,7 +86,6 @@ const AuthProvider = ({ children }) => {
         displayName: name,
         photoURL: photo,
       });
-      // Update local user state
       setUser((prev) => ({
         ...prev,
         displayName: name,
@@ -103,7 +97,7 @@ const AuthProvider = ({ children }) => {
     }
   };
 
-  // Send password reset email
+  // ✅ Reset password
   const resetPassword = async (email) => {
     setAuthError(null);
     try {
@@ -114,7 +108,7 @@ const AuthProvider = ({ children }) => {
     }
   };
 
-  // Update email (requires recent login)
+  // ✅ Change email
   const changeEmail = async (newEmail, currentPassword) => {
     setAuthError(null);
     try {
@@ -130,7 +124,7 @@ const AuthProvider = ({ children }) => {
     }
   };
 
-  // Update password (requires recent login)
+  // ✅ Change password
   const changePassword = async (currentPassword, newPassword) => {
     setAuthError(null);
     try {
@@ -146,62 +140,53 @@ const AuthProvider = ({ children }) => {
     }
   };
 
-  // Get formatted last sign in time
-  const getLastSignInTime = () => {
-    if (user?.metadata?.lastSignInTime) {
-      return new Date(user.metadata.lastSignInTime).toLocaleString();
-    }
-    return 'N/A';
-  };
+  // ✅ Metadata helpers
+  const getLastSignInTime = () =>
+    user?.metadata?.lastSignInTime
+      ? new Date(user.metadata.lastSignInTime).toLocaleString()
+      : 'N/A';
 
-  // Get account creation time
-  const getCreationTime = () => {
-    if (user?.metadata?.creationTime) {
-      return new Date(user.metadata.creationTime).toLocaleString();
-    }
-    return 'N/A';
-  };
+  const getCreationTime = () =>
+    user?.metadata?.creationTime
+      ? new Date(user.metadata.creationTime).toLocaleString()
+      : 'N/A';
 
-  // ✅ Auth state observer with JWT integration - FIXED
+  // ✅ AUTH STATE OBSERVER (JWT + LocalStorage)
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      console.log('Auth State Changed:', currentUser?.email || 'No user'); // Debug log
-      
       setUser(currentUser);
 
-      // JWT Token Management
       if (currentUser) {
-        const userInfo = { email: currentUser.email };
         try {
-          // Get JWT token from server
-          const response = await axiosPublic.post('/jwt', userInfo);
-          console.log('JWT Token Generated:', response.data); // Debug log
+          const { data } = await axiosPublic.post('/jwt', {
+            email: currentUser.email,
+          });
+
+          if (data?.token) {
+            localStorage.setItem('access-token', data.token); // ✅ token save
+          }
         } catch (error) {
-          console.error('JWT generation error:', error);
+          console.error('JWT Error:', error);
         }
       } else {
-        // Clear JWT token
+        localStorage.removeItem('access-token'); // ✅ token remove
         try {
           await axiosPublic.post('/logout');
-          console.log('User logged out, token cleared'); // Debug log
         } catch (error) {
-          console.error('Logout error:', error);
+          console.error('Logout Error:', error);
         }
       }
 
-      // ✅ সব কাজ শেষে loading false - এটাই মূল fix
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
 
-  // ✅ Clear auth error after 5 seconds
+  // ✅ Auto clear error
   useEffect(() => {
     if (authError) {
-      const timer = setTimeout(() => {
-        setAuthError(null);
-      }, 5000);
+      const timer = setTimeout(() => setAuthError(null), 5000);
       return () => clearTimeout(timer);
     }
   }, [authError]);
