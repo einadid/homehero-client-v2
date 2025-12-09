@@ -1,40 +1,34 @@
-import axios from 'axios';
+// src/hooks/useAxiosSecure.js
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from './useAuth';
-
-// Create the axios instance
-const axiosSecure = axios.create({
-  // Use your environment variable for the API URL
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000',
-  withCredentials: true, // Important: sends cookies to the server
-});
+import axiosSecure from './useAxios';
+import useAuth from './useAuth';
 
 const useAxiosSecure = () => {
-  const { logOut } = useAuth();
   const navigate = useNavigate();
+  const { logOut } = useAuth();
 
   useEffect(() => {
-    // 1. Intercept responses to check for errors
-    const interceptor = axiosSecure.interceptors.response.use(
-      (response) => {
-        return response;
-      },
+    // Response interceptor for handling auth errors
+    const responseInterceptor = axiosSecure.interceptors.response.use(
+      (response) => response,
       async (error) => {
-        // 2. If the error is 401 (Unauthorized) or 403 (Forbidden)
-        if (error.response?.status === 401 || error.response?.status === 403) {
-          // Log the user out and redirect to login
-          console.log('Unauthorized access, logging out...');
+        const status = error.response?.status;
+        
+        if (status === 401 || status === 403) {
+          console.log('🚪 Auth error, logging out...');
           await logOut();
-          navigate('/login');
+          navigate('/login', { 
+            state: { message: 'Session expired. Please login again.' } 
+          });
         }
+        
         return Promise.reject(error);
       }
     );
-    
-    // Cleanup the interceptor when component unmounts
+
     return () => {
-      axiosSecure.interceptors.response.eject(interceptor);
+      axiosSecure.interceptors.response.eject(responseInterceptor);
     };
   }, [logOut, navigate]);
 

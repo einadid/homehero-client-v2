@@ -9,16 +9,11 @@ import {
   onAuthStateChanged,
   updateProfile,
   sendPasswordResetEmail,
-  updateEmail,
-  updatePassword,
-  reauthenticateWithCredential,
-  EmailAuthProvider,
 } from 'firebase/auth';
 import { auth } from '../config/firebase.config';
 import { axiosPublic } from '../hooks/useAxios';
 
 export const AuthContext = createContext(null);
-
 const googleProvider = new GoogleAuthProvider();
 
 const AuthProvider = ({ children }) => {
@@ -26,154 +21,59 @@ const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
 
-  // ✅ Create user
-  const createUser = async (email, password) => {
+  // Create user
+  const createUser = (email, password) => {
     setLoading(true);
-    setAuthError(null);
-    try {
-      return await createUserWithEmailAndPassword(auth, email, password);
-    } catch (error) {
-      setAuthError(error.message);
-      setLoading(false);
-      throw error;
-    }
+    return createUserWithEmailAndPassword(auth, email, password);
   };
 
-  // ✅ Sign in
-  const signIn = async (email, password) => {
+  // Sign in
+  const signIn = (email, password) => {
     setLoading(true);
-    setAuthError(null);
-    try {
-      return await signInWithEmailAndPassword(auth, email, password);
-    } catch (error) {
-      setAuthError(error.message);
-      setLoading(false);
-      throw error;
-    }
+    return signInWithEmailAndPassword(auth, email, password);
   };
 
-  // ✅ Google Sign in
-  const signInWithGoogle = async () => {
+  // Google Sign in
+  const signInWithGoogle = () => {
     setLoading(true);
-    setAuthError(null);
-    try {
-      return await signInWithPopup(auth, googleProvider);
-    } catch (error) {
-      setAuthError(error.message);
-      setLoading(false);
-      throw error;
-    }
+    return signInWithPopup(auth, googleProvider);
   };
 
-  // ✅ Log out
+  // Log out
   const logOut = async () => {
     setLoading(true);
-    setAuthError(null);
+    localStorage.removeItem('access-token'); // ✅ Clear token first
+    
     try {
-      // ✅ Clear token first
-      localStorage.removeItem('access-token');
-      
-      // ✅ Then logout from server
-      try {
-        await axiosPublic.post('/logout');
-      } catch (error) {
-        console.error('Server logout error:', error);
-      }
-      
-      // ✅ Finally sign out from Firebase
-      await signOut(auth);
+      await axiosPublic.post('/logout');
     } catch (error) {
-      setAuthError(error.message);
-      throw error;
-    } finally {
-      setLoading(false);
+      console.error('Logout API error:', error);
     }
+    
+    return signOut(auth);
   };
 
-  // ✅ Update profile
-  const updateUserProfile = async (name, photo) => {
-    setAuthError(null);
-    try {
-      await updateProfile(auth.currentUser, {
-        displayName: name,
-        photoURL: photo,
-      });
-      setUser((prev) => ({
-        ...prev,
-        displayName: name,
-        photoURL: photo,
-      }));
-    } catch (error) {
-      setAuthError(error.message);
-      throw error;
-    }
+  // Update profile
+  const updateUserProfile = (name, photo) => {
+    return updateProfile(auth.currentUser, {
+      displayName: name,
+      photoURL: photo,
+    });
   };
 
-  // ✅ Reset password
-  const resetPassword = async (email) => {
-    setAuthError(null);
-    try {
-      await sendPasswordResetEmail(auth, email);
-    } catch (error) {
-      setAuthError(error.message);
-      throw error;
-    }
+  // Reset password
+  const resetPassword = (email) => {
+    return sendPasswordResetEmail(auth, email);
   };
 
-  // ✅ Change email
-  const changeEmail = async (newEmail, currentPassword) => {
-    setAuthError(null);
-    try {
-      const credential = EmailAuthProvider.credential(
-        auth.currentUser.email,
-        currentPassword
-      );
-      await reauthenticateWithCredential(auth.currentUser, credential);
-      await updateEmail(auth.currentUser, newEmail);
-    } catch (error) {
-      setAuthError(error.message);
-      throw error;
-    }
-  };
-
-  // ✅ Change password
-  const changePassword = async (currentPassword, newPassword) => {
-    setAuthError(null);
-    try {
-      const credential = EmailAuthProvider.credential(
-        auth.currentUser.email,
-        currentPassword
-      );
-      await reauthenticateWithCredential(auth.currentUser, credential);
-      await updatePassword(auth.currentUser, newPassword);
-    } catch (error) {
-      setAuthError(error.message);
-      throw error;
-    }
-  };
-
-  // ✅ Metadata helpers
-  const getLastSignInTime = () =>
-    user?.metadata?.lastSignInTime
-      ? new Date(user.metadata.lastSignInTime).toLocaleString()
-      : 'N/A';
-
-  const getCreationTime = () =>
-    user?.metadata?.creationTime
-      ? new Date(user.metadata.creationTime).toLocaleString()
-      : 'N/A';
-
-  // ============================================================
-  // ✅ AUTH STATE OBSERVER (FIXED - Better Token Handling)
-  // ============================================================
+  // ✅ AUTH STATE OBSERVER - CRITICAL FIX
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       console.log('🔐 Auth State Changed:', currentUser?.email || 'No user');
-      setUser(currentUser);
-
+      
       if (currentUser?.email) {
         try {
-          // ✅ Get JWT Token from server
+          // ✅ Request JWT token
           const response = await axiosPublic.post('/jwt', {
             email: currentUser.email,
           });
@@ -183,29 +83,35 @@ const AuthProvider = ({ children }) => {
           if (response.data?.success && response.data?.token) {
             // ✅ Save token to localStorage
             localStorage.setItem('access-token', response.data.token);
-            console.log('✅ Token saved to localStorage');
+            console.log('✅ Token SAVED:', response.data.token.substring(0, 20) + '...');
             
-            // ✅ Verify token was saved
-            const savedToken = localStorage.getItem('access-token');
-            console.log('🔍 Token verification:', savedToken ? 'Token exists' : 'Token missing');
+            // ✅ Double-check it was saved
+            const verify = localStorage.getItem('access-token');
+            if (verify) {
+              console.log('✅ Token VERIFIED in localStorage');
+            } else {
+              console.error('❌ Token NOT SAVED - localStorage issue');
+            }
           } else {
-            console.error('❌ No token in response:', response.data);
+            console.error('❌ Invalid JWT response:', response.data);
           }
         } catch (error) {
-          console.error('❌ JWT Error:', error.response?.data || error.message);
-          // ✅ Clear any stale token on error
+          console.error('❌ JWT Request Failed:', error.response?.data || error.message);
           localStorage.removeItem('access-token');
         }
+        
+        // ✅ Set user AFTER token handling
+        setUser(currentUser);
       } else {
-        // ✅ User logged out - clear token
-        console.log('🚪 User logged out, clearing token');
+        // No user - clear everything
+        console.log('🚪 No user, clearing token');
         localStorage.removeItem('access-token');
+        setUser(null);
         
         try {
           await axiosPublic.post('/logout');
-          console.log('✅ Server logout successful');
         } catch (error) {
-          console.error('⚠️ Logout endpoint error:', error.message);
+          // Ignore logout errors when no user
         }
       }
 
@@ -215,21 +121,13 @@ const AuthProvider = ({ children }) => {
     return () => unsubscribe();
   }, []);
 
-  // ✅ Auto clear error after 5 seconds
+  // Auto clear error
   useEffect(() => {
     if (authError) {
       const timer = setTimeout(() => setAuthError(null), 5000);
       return () => clearTimeout(timer);
     }
   }, [authError]);
-
-  // ============================================================
-  // ✅ Check Token on Mount (For Page Refresh)
-  // ============================================================
-  useEffect(() => {
-    const token = localStorage.getItem('access-token');
-    console.log('🔄 Initial token check:', token ? 'Token found' : 'No token');
-  }, []);
 
   const authInfo = {
     user,
@@ -241,10 +139,6 @@ const AuthProvider = ({ children }) => {
     logOut,
     updateUserProfile,
     resetPassword,
-    changeEmail,
-    changePassword,
-    getLastSignInTime,
-    getCreationTime,
     setAuthError,
   };
 

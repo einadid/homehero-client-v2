@@ -1,51 +1,67 @@
+// src/hooks/useAxios.js
 import axios from 'axios';
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from './useAuth';
 
-const API_URL = import.meta.env.VITE_API_URL;
+const BASE_URL = import.meta.env.VITE_API_URL || 'https://homehero-server-v2.vercel.app';
 
+// ✅ Public Axios (No Auth Required)
 export const axiosPublic = axios.create({
-  baseURL: API_URL,
+  baseURL: BASE_URL,
   withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
 
-export const axiosSecure = axios.create({
-  baseURL: API_URL,
+// ✅ Secure Axios (With Auth Token)
+const axiosSecure = axios.create({
+  baseURL: BASE_URL,
   withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
 
-const useAxiosSecure = () => {
-  const { logOut } = useAuth();
-  const navigate = useNavigate();
+// ✅ Request Interceptor - MUST Attach Token
+axiosSecure.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('access-token');
+    
+    console.log('🔐 Axios Request Interceptor:');
+    console.log('   URL:', config.url);
+    console.log('   Token exists:', !!token);
+    
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    
+    return config;
+  },
+  (error) => {
+    console.error('❌ Request Interceptor Error:', error);
+    return Promise.reject(error);
+  }
+);
 
-  useEffect(() => {
-    // 1. Request Interceptor (টোকেন হেডারে পাঠানো)
-    axiosSecure.interceptors.request.use(
-      (config) => {
-        const token = localStorage.getItem('access-token');
-        if (token) {
-          config.headers.authorization = `Bearer ${token}`;
-        }
-        return config;
-      },
-      (error) => Promise.reject(error)
-    );
+// ✅ Response Interceptor - Handle Errors
+axiosSecure.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const status = error.response?.status;
+    const message = error.response?.data?.message;
+    
+    console.error('🚨 API Error:', { status, message, url: error.config?.url });
+    
+    if (status === 401) {
+      console.warn('🔒 401 Unauthorized - Redirecting to login...');
+      // Token invalid বা expired
+      localStorage.removeItem('access-token');
+      
+      // Optional: Redirect to login
+      // window.location.href = '/login';
+    }
+    
+    return Promise.reject(error);
+  }
+);
 
-    // 2. Response Interceptor (এরর হ্যান্ডলিং)
-    axiosSecure.interceptors.response.use(
-      (res) => res,
-      async (error) => {
-        if (error.response?.status === 401 || error.response?.status === 403) {
-          await logOut();
-          navigate('/login');
-        }
-        return Promise.reject(error);
-      }
-    );
-  }, [logOut, navigate]);
-
-  return axiosSecure;
-};
-
-export default useAxiosSecure;
+export default axiosSecure;
