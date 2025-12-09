@@ -70,11 +70,23 @@ const AuthProvider = ({ children }) => {
     setLoading(true);
     setAuthError(null);
     try {
+      // ✅ Clear token first
+      localStorage.removeItem('access-token');
+      
+      // ✅ Then logout from server
+      try {
+        await axiosPublic.post('/logout');
+      } catch (error) {
+        console.error('Server logout error:', error);
+      }
+      
+      // ✅ Finally sign out from Firebase
       await signOut(auth);
     } catch (error) {
       setAuthError(error.message);
-      setLoading(false);
       throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -151,29 +163,49 @@ const AuthProvider = ({ children }) => {
       ? new Date(user.metadata.creationTime).toLocaleString()
       : 'N/A';
 
-  // ✅ AUTH STATE OBSERVER (JWT + LocalStorage)
+  // ============================================================
+  // ✅ AUTH STATE OBSERVER (FIXED - Better Token Handling)
+  // ============================================================
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      console.log('🔐 Auth State Changed:', currentUser?.email || 'No user');
       setUser(currentUser);
 
-      if (currentUser) {
+      if (currentUser?.email) {
         try {
-          const { data } = await axiosPublic.post('/jwt', {
+          // ✅ Get JWT Token from server
+          const response = await axiosPublic.post('/jwt', {
             email: currentUser.email,
           });
 
-          if (data?.token) {
-            localStorage.setItem('access-token', data.token); // ✅ token save
+          console.log('📦 JWT Response:', response.data);
+
+          if (response.data?.success && response.data?.token) {
+            // ✅ Save token to localStorage
+            localStorage.setItem('access-token', response.data.token);
+            console.log('✅ Token saved to localStorage');
+            
+            // ✅ Verify token was saved
+            const savedToken = localStorage.getItem('access-token');
+            console.log('🔍 Token verification:', savedToken ? 'Token exists' : 'Token missing');
+          } else {
+            console.error('❌ No token in response:', response.data);
           }
         } catch (error) {
-          console.error('JWT Error:', error);
+          console.error('❌ JWT Error:', error.response?.data || error.message);
+          // ✅ Clear any stale token on error
+          localStorage.removeItem('access-token');
         }
       } else {
-        localStorage.removeItem('access-token'); // ✅ token remove
+        // ✅ User logged out - clear token
+        console.log('🚪 User logged out, clearing token');
+        localStorage.removeItem('access-token');
+        
         try {
           await axiosPublic.post('/logout');
+          console.log('✅ Server logout successful');
         } catch (error) {
-          console.error('Logout Error:', error);
+          console.error('⚠️ Logout endpoint error:', error.message);
         }
       }
 
@@ -183,13 +215,21 @@ const AuthProvider = ({ children }) => {
     return () => unsubscribe();
   }, []);
 
-  // ✅ Auto clear error
+  // ✅ Auto clear error after 5 seconds
   useEffect(() => {
     if (authError) {
       const timer = setTimeout(() => setAuthError(null), 5000);
       return () => clearTimeout(timer);
     }
   }, [authError]);
+
+  // ============================================================
+  // ✅ Check Token on Mount (For Page Refresh)
+  // ============================================================
+  useEffect(() => {
+    const token = localStorage.getItem('access-token');
+    console.log('🔄 Initial token check:', token ? 'Token found' : 'No token');
+  }, []);
 
   const authInfo = {
     user,
